@@ -386,7 +386,7 @@ def print_object(cmd, object_plays, sp=None):
         return top_objects[:RESULTS]
 
 def parse_data():
-    folder = Path("data")
+    folder = Path(".data")
     data = []
     for file in folder.iterdir():
         if file.is_file() and file.suffix == ".json":
