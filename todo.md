@@ -1,25 +1,25 @@
 # TODO List
 
-## Features
+Ranked in order of most to least important.
 
+## Sprint 1- 28/04
+
+### Features
+
+- [X] Add search by specific album or track?
+  - [X] Create album_song_plays for specific albums.
+- [ ] Add last.fm API to get more track data
 - [ ] Find the longest repeat of a track
-- [X] Add filter by year or month for all `print_object`
-- [ ] Add search by specific album or track?
 
-## Improvements
+### Improvements
 
-- [ ] Potentially remove `album_plays` / `artist_plays` ?
-- [ ] Add types to code
-- [X] Change track keys to ISRC from spotify API -> Too slow!
-- [ ] Calculate the artist for an album based on how much they appear OR get from spotify API
-- [ ] Potentially change the ranking of albums to include multiple songs at a minimum? (e.g. must have >= 3 different songs to count)
+- [ ] Handle exceptions for API calls
+- [X] Deal with inconsistent command styles (in line and line by line)
+- [ ] Cmd texts
+  - [ ] Change cmd.text to display text? Or add another field
+  - [ ] Change 'Total listens" for skip command
+  - [ ] Change "Total unique listens: 51 tracks(s)"
+- [ ] Ignore case on track names?
 
-### Printing
-- [X] Only print out song name of 'first played' if object is NOT track
-- [X] Only print 'by {artist}' if object is NOT artist
-- [ ] Change 'Total listens" for skip command
-
-## Duplicate Issues
-- [ ] 10. Saw You In a Dream by The Japanese House, played 108 times for 4 hours 31 minutes, first played on 18 May, 2019
-- [ ] 13. Saw You in a Dream by The Japanese House, played 88 times for 4 hours 38 minutes, first played on 19 July, 2020
-- [ ] Ignore case?
+# Documentation and Style
+- [X] Refactor cmd processing into own functions
