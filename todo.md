@@ -20,6 +20,7 @@ Ranked in order of most to least important.
   - [ ] Change 'Total listens" for skip command
   - [ ] Change "Total unique listens: 51 tracks(s)"
 - [ ] Ignore case on track names?
+- [ ] Add a printing function for printing generic lists?
 
 # Documentation and Style
 - [X] Refactor cmd processing into own functions

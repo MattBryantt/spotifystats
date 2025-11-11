@@ -7,7 +7,8 @@ import spotipy
 import readline
 import atexit
 import shutil
-from itertools import chain
+from dateutil.relativedelta import relativedelta
+from itertools import chain, groupby
 from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -37,6 +38,7 @@ class Cmd(Enum):
     ARTISTS = ("artists", Mode.TIME)
     ARTIST = ("artist", Mode.PLAYS)
     SKIPS = ("skips", Mode.PLAYS)
+    AGGREGATE = ("aggregate", Mode.PLAYS)
     SUMMARY = ("summary", None)
     FILTER = ("filter", None)
     RESULT = ("result", None)
@@ -58,11 +60,14 @@ class Cmd(Enum):
 DUPLICATES = ["The 1975"] # TODO: Update with spotify API?
 # TODO: Add songs that have different names / URIs but are in fact the same song! (eg. popular)
 IGNORE = ["Miracle Tones", "Timo Krantz"]
-RESULTS = 10
-ALBUMSLIMIT = 3
+RESULTS = 5
+ALBUMSLIMIT = 3 # TODO: Define
 
-STARTFILTER = datetime.min
-ENDFILTER = datetime.max
+STARTDATE = datetime.min
+ENDDATE = datetime.max
+
+startfilter = datetime.min
+endfilter = datetime.max
 
 def make_cmd(top_songs):
     if not top_songs:
@@ -83,11 +88,13 @@ def make_cmd(top_songs):
 
         user_id = sp.current_user()["id"]
 
+        name_input = input("Please name your playlist: ")
+
         playlist = sp.user_playlist_create(
             user=user_id,
-            name=f"top {RESULTS}", # TODO: Add artist to name if singular artist
+            name=name_input,
             public=False,
-            description=f"{STARTFILTER.strftime('%d-%m-%Y')} to {ENDFILTER.strftime('%d-%m-%Y')}"
+            description=f"{startfilter.strftime('%d-%m-%Y')} to {endfilter.strftime('%d-%m-%Y')}"
         )
     
         top_song_uris = []
@@ -113,32 +120,40 @@ def result_cmd():
     RESULTS = int(number)
 
 def filter_cmd():
-    global STARTFILTER, ENDFILTER
-    startfilter = input("Please provide a start date: ")
-    endfilter = input("Please provide an end date: ")
-    startfilter.strip()
-    endfilter.strip()
+    global startfilter, endfilter
 
-    if startfilter:
+    print(f"Current start filter: {startfilter.strftime('%d %b %Y')}")
+    print(f"Current end filter: {endfilter.strftime('%d %b %Y')}")
+    startfilter_input = input("Please provide a start date, or click enter to reset: ")
+    endfilter_input = input("Please provide an end date, or click enter to reset: ")
+    startfilter_input.strip()
+    endfilter_input.strip()
+
+    if startfilter_input and startfilter_input != "":
         try:
-            startfilter = parser.parse(startfilter)
-            STARTFILTER = startfilter
-            print("Added start date:", STARTFILTER.strftime("%d-%m-%Y"))
+            startfilter_input = parser.parse(startfilter_input)
+            startfilter = startfilter_input
+            print("Added start filter:", startfilter.strftime("%d %b %Y"))
         except parser.ParserError:
             print("Invalid date. Please provide a correct date format.")
             return
-    if endfilter:
+    else:
+        startfilter = STARTDATE
+
+    if endfilter_input:
         try:
-            endfilter = parser.parse(endfilter)
-            print(endfilter)
-            ENDFILTER = endfilter
-            print("Added end date:", ENDFILTER.strftime("%d-%m-%Y"))
+            endfilter_input = parser.parse(endfilter_input)
+            print("Added end filter:", endfilter.strftime("%d %b %Y"))
+            endfilter = endfilter_input
         except parser.ParserError:
             print("Invalid date. Please provide a correct date format.")
             return
-    if ENDFILTER < STARTFILTER:
-        STARTFILTER = datetime.min
-        ENDFILTER = datetime.max
+    else:
+        endfilter = ENDDATE
+
+    if endfilter < startfilter:
+        startfilter = STARTDATE
+        endfilter = ENDDATE
         print("Invalid filters. Start date must be before end date.")
         return
 
@@ -256,7 +271,7 @@ def main(args):
         pass
     atexit.register(readline.write_history_file, history_file)
 
-    global RESULTS, STARTFILTER, ENDFILTER
+    global RESULTS, startfilter, endfilter
     top_songs = None
     
     # Process commands
@@ -286,6 +301,8 @@ def main(args):
                     print_object(Cmd.ALBUMS, pd.album_plays)
                 case Cmd.ALBUM.text:
                     album_cmd(pd)
+                case Cmd.AGGREGATE.text:
+                    top_songs = print_objects(pd)
                 case Cmd.SKIPS.text:
                     print_object(Cmd.SKIPS, pd.skips)
                 case Cmd.EXIT.text:
@@ -307,13 +324,56 @@ def print_summary(pd):
     print(f"Unique artists played: {len(pd.artist_plays.keys())}")
     print(f"Total time: {pd.total_time // 3600000} hours")
 
+def print_objects(pd):
+    """
+    Aggregate results of a certain command.
+    """
+
+    global startfilter, endfilter
+    units = {"days", "weeks", "months", "years"}
+    unit = None
+    while unit not in units:
+        unit = input("What time unit (days, weeks, months or years)? ") # TODO: Add error message
+    delta = relativedelta(**{unit: 1})
+    count = input("How many iterations? ")
+    result_cmd()
+
+    current = endfilter
+    aggregate_list = []
+    for _ in range(int(count)):
+        current -= delta
+
+        startfilter_tmp = startfilter
+        endfilter_tmp = endfilter
+
+        startfilter = current
+        endfilter = current + delta
+
+        # TODO: Add print flag to print_object?
+        result = print_object(Cmd.TRACKS, pd.song_plays)
+        if result:
+            aggregate_list.extend(result)
+
+        startfilter = startfilter_tmp
+        endfilter = endfilter_tmp
+    
+    # print("=" * shutil.get_terminal_size().columns)
+    # for number, play in enumerate(aggregate_list):
+    #     track = play[0]
+    #     print(f"{unit.capitalize()} {number}: {track[0]} by {track[1]}")
+
+    # Remove duplicate tracks
+    seen = set()
+    unique = [track for track in aggregate_list if track[0] not in seen and not seen.add(track[0])]
+    return unique
+
 def print_object(cmd, object_plays, sp=None):
     print("=" * shutil.get_terminal_size().columns)
     # Filter object plays and remove keys with no valid filtered results
     object_plays = {
         obj: filtered
         for obj, plays in object_plays.items()
-        if (filtered := [play for play in plays if STARTFILTER <= date(play) <= ENDFILTER])
+        if (filtered := [play for play in plays if startfilter <= date(play) <= endfilter])
     }
     if not object_plays:
         print("No plays found.")
@@ -368,7 +428,7 @@ def print_object(cmd, object_plays, sp=None):
             first_play_track = first_play["master_metadata_track_name"]
             first_play_date = date(first_play).strftime("%-d %B, %Y")
 
-            # TODO: Remove first play if STARTFILTER is adjusted?
+            # TODO: Remove first play if startfilter is adjusted?
             play_time = sum(play["ms_played"] for play in top_objects[i][1])
             play_hours = play_time // 3600000
             play_mins = (play_time // 60000) % 60
@@ -402,7 +462,10 @@ def parse_data():
     return data
 
 def process_data(args, data):
-    global STARTFILTER, ENDFILTER
+    
+    global STARTDATE, ENDDATE, startfilter, endfilter
+    dates = []
+
     song_plays = {}
     artist_plays = {}
     album_plays = {}
@@ -410,12 +473,8 @@ def process_data(args, data):
     total_time = 0
 
     for play in data:
-        # TODO: Introduce with multithreading.
-        # play_date = date(play)
-        # STARTFILTER = min(play_date, STARTFILTER)
-        # ENDFILTER = max(play_date, ENDFILTER)
-
         # uri = play["spotify_track_uri"]
+        dates.append(datetime.strptime(play["ts"], "%Y-%m-%dT%H:%M:%SZ"))
 
         artist = play["master_metadata_album_artist_name"]
         track = play["master_metadata_track_name"]
@@ -456,6 +515,9 @@ def process_data(args, data):
             song_plays[song] = []
         song_plays[song].append(play)
 
+    STARTDATE = startfilter = min(dates)
+    ENDDATE = endfilter = max(dates)
+
     return ProcessedData(song_plays, artist_plays, album_plays, skips, total_time)
 
 def date(play):
@@ -467,4 +529,5 @@ def parse_args():
     main(args)
 
 if __name__ == "__main__":
+    load_dotenv()
     parse_args()
