@@ -18,6 +18,12 @@ from enum import Enum, auto
 from dotenv import load_dotenv
 from rapidfuzz import process, fuzz
 
+"""
+This program allows a user to analyse their spotify data by various filters.
+
+These filters include artists, tracks, albums.
+"""
+
 @dataclass
 class ProcessedData:
     song_plays: dict
@@ -56,12 +62,11 @@ class Cmd(Enum):
 
 
 # Songs that have the same name across different albums and are in fact different songs.
-# Duplicates can be manually updated in the config file.
-DUPLICATES = ["The 1975"] # TODO: Update with spotify API?
-# TODO: Add songs that have different names / URIs but are in fact the same song! (eg. popular)
+DUPLICATES = ["The 1975"]
+# TODO: Add songs that have different names / URIs, but are in fact the same song.
 IGNORE = ["Miracle Tones", "Timo Krantz"]
 RESULTS = 5
-ALBUMSLIMIT = 3 # TODO: Define
+ALBUMSLIMIT = 3 # TODO: Replace with hardcoded value
 
 STARTDATE = datetime.min
 ENDDATE = datetime.max
@@ -69,7 +74,13 @@ ENDDATE = datetime.max
 startfilter = datetime.min
 endfilter = datetime.max
 
+
 def make_cmd(top_songs):
+    """
+    This function creates a spotify playlist based on output of the previous command.
+    
+    :param top_songs: Output of the previous command
+    """
     if not top_songs:
         print("No track list found. Please make a query to get a list.")
     if len(top_songs) > 1000:
@@ -112,6 +123,9 @@ def make_cmd(top_songs):
         print("Error creating playlist.")
 
 def result_cmd():
+    """
+    This function allows the user to change the number of results displayed for each command.
+    """
     global RESULTS
     number = input("How many results? ")
     if not number:
@@ -120,6 +134,9 @@ def result_cmd():
     RESULTS = int(number)
 
 def filter_cmd():
+    """
+    This function allows the user to change the date range of a command.
+    """
     global startfilter, endfilter
 
     print(f"Current start filter: {startfilter.strftime('%d %b %Y')}")
@@ -158,6 +175,11 @@ def filter_cmd():
         return
 
 def artist_cmd(pd):
+    """
+    This function allows a user to get the top songs for a specific artist by searching.
+    
+    :param pd: ProcessedData object
+    """
     artist_name = input("Which artist? ")
     match_list = difflib.get_close_matches(artist_name, (key.lower() for key in pd.artist_plays.keys()), n=1, cutoff=0.5)
     if not match_list:
@@ -168,6 +190,11 @@ def artist_cmd(pd):
     return print_object(Cmd.TRACKS, artist_song_plays)
 
 def track_cmd(pd):
+    """
+    This function allows a user to find their data for a specific track.
+    
+    :param pd: ProcessedData object
+    """
     track_name = input("What track? ")
     artist_name = input("By which artist? ")
 
@@ -217,6 +244,11 @@ def custom_score(query, choice, **kwargs):
         return (0.4 * fuzz.partial_ratio(query, choice) + 0.4 * fuzz.token_set_ratio(query, choice) + 0.2 * fuzz.WRatio(query, choice))
 
 def album_cmd(pd):
+    """
+    This function allows a user to get their data for a specific album.
+    
+    :param pd: ProcessedData object
+    """
     album_name = input("Which album? ")
 
     album_match_list = process.extract(
@@ -259,9 +291,13 @@ def help_cmd():
     print("make - Make a spotify playlist based on the previous track or specific artist query")
     print("exit - Exit the program")
 
-def main(args):
+def main():
+    """
+    This function allows a user to repeatedly enter commands until the program is ended.
+    """
+
     data = parse_data()
-    pd = process_data(args, data)
+    pd = process_data(data)
     
     # Setup command history
     history_file = os.path.expanduser("~/.history_file")
@@ -294,7 +330,7 @@ def main(args):
                 case Cmd.ARTIST.text:
                     top_songs = artist_cmd(pd)
                 case Cmd.TRACKS.text:
-                    print_object(Cmd.TRACKS, pd.song_plays)
+                    top_songs = print_object(Cmd.TRACKS, pd.song_plays)
                 case Cmd.TRACK.text:
                     track_cmd(pd)
                 case Cmd.ALBUMS.text:
@@ -318,6 +354,11 @@ def main(args):
         print("\nExiting program...")
 
 def print_summary(pd):
+    """
+    This function allows a user to print a summary of all their data.
+
+    :param pd: ProcessedData object
+    """
     print("Summary:")
     print(f"Total songs played: {sum(len(song) for song in pd.song_plays.values())}")
     print(f"Unique songs played: {len(pd.song_plays.keys())}")
@@ -326,7 +367,9 @@ def print_summary(pd):
 
 def print_objects(pd):
     """
-    Aggregate results of a certain command.
+    This function allows a user to aggregate results of a specific command.
+
+    :param pd: ProcessedData object
     """
 
     global startfilter, endfilter
@@ -367,7 +410,13 @@ def print_objects(pd):
     unique = [track for track in aggregate_list if track[0] not in seen and not seen.add(track[0])]
     return unique
 
-def print_object(cmd, object_plays, sp=None):
+def print_object(cmd, object_plays):
+    """
+    This function prints the given command.
+    
+    :param cmd: Given command
+    :param object_plays: Dictionary of plays of track / artist / album
+    """
     print("=" * shutil.get_terminal_size().columns)
     # Filter object plays and remove keys with no valid filtered results
     object_plays = {
@@ -446,6 +495,9 @@ def print_object(cmd, object_plays, sp=None):
         return top_objects[:RESULTS]
 
 def parse_data():
+    """
+    Parses data from JSON files.
+    """
     folder = Path(".data")
     data = []
     for file in folder.iterdir():
@@ -461,7 +513,12 @@ def parse_data():
                     print(f"Unexpected error with {file.name}: {e}")
     return data
 
-def process_data(args, data):
+def process_data(data):
+    """
+    Pre-processes data into various filters (e.g. artist, album, track)
+    
+    :param data: Raw JSON data
+    """
     
     global STARTDATE, ENDDATE, startfilter, endfilter
     dates = []
@@ -523,11 +580,6 @@ def process_data(args, data):
 def date(play):
     return datetime.strptime(play["ts"], "%Y-%m-%dT%H:%M:%SZ")
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="A tool to analyse your spotify data")
-    args = parser.parse_args()
-    main(args)
-
 if __name__ == "__main__":
     load_dotenv()
-    parse_args()
+    main()
